@@ -1,4 +1,10 @@
+// https://github.com/tidwall/btype
+//
 // Copyright 2026 Joshua J Baker. All rights reserved.
+// Use of this source code is governed by an MIT-style
+// license that can be found in the LICENSE file.
+//
+// btype - B-tree based collections for go
 package btype
 
 import (
