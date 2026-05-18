@@ -760,7 +760,7 @@ func (t *tree[K, V]) PushBack(key K, value V) bool {
 	for {
 		if n.leaf() {
 			if t.dataCompare != nil && t.lte(key, value, n.keys[n.len-1],
-				n.values[0]) {
+				n.values[n.len-1]) {
 				break
 			}
 			n.insertItemAt(key, value, n.len)

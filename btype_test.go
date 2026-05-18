@@ -4231,3 +4231,17 @@ func TestDeque(t *testing.T) {
 	assert(b.Len() == 0)
 
 }
+
+func TestTablePushBack(t *testing.T) {
+	var b Table[int]
+
+	for i := 0; i < 1000; i++ {
+		b.PushBack(i)
+	}
+	k, _ := b.Back()
+	assert(k == 999)
+	assert(!b.PushBack(961))
+	k, _ = b.Back()
+	assert(k == 999)
+
+}
