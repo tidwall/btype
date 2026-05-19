@@ -540,7 +540,7 @@ func testMapDeleteRange(rng *rand.Rand, N int) time.Duration {
 		keyMax = keys[e]
 	}
 
-	var list *slice2[int, int]
+	var list Slice2[int, int]
 	if opts != nil {
 		list = m.DeleteRangeOptions(keyMin, keyMax, *opts)
 	} else {

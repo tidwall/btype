@@ -1505,7 +1505,7 @@ type Slice2[K, V any] interface {
 	All() iter.Seq2[K, V]
 	Backward() iter.Seq2[K, V]
 	Keys() iter.Seq[K]
-	Values() iter.Seq[K]
+	Values() iter.Seq[V]
 }
 
 type Slice[V any] interface {
@@ -1841,7 +1841,7 @@ type DeleteRangeOptions struct {
 }
 
 func (t *tree[K, V]) DeleteRangeAt(index, count int, opts DeleteRangeOptions,
-) *slice2[K, V] {
+) Slice2[K, V] {
 	noret := opts.NoReturn
 	if opts.MinExclusive {
 		index++
@@ -1879,7 +1879,7 @@ func (t *tree[K, V]) DeleteRangeAt(index, count int, opts DeleteRangeOptions,
 
 func (t *tree[K, V]) DeleteRange(minKey K, minValue V, maxKey K, maxValue V,
 	opts DeleteRangeOptions,
-) *slice2[K, V] {
+) Slice2[K, V] {
 	start, ok := t.IndexOf(minKey, minValue)
 	if ok && opts.MinExclusive {
 		start++
@@ -1949,7 +1949,7 @@ func (s *slice[T]) Len() int {
 	return 0
 }
 
-func sliceK[T any](s2 *slice2[T, omit]) *slice[T] {
+func sliceK[T any](s2 Slice2[T, omit]) *slice[T] {
 	var s1 *slice[T]
 	if s2 != nil {
 		s1 = &slice[T]{s2}
@@ -1957,7 +1957,7 @@ func sliceK[T any](s2 *slice2[T, omit]) *slice[T] {
 	return s1
 }
 
-func sliceV[T any](s2 *slice2[omit, T]) *slice[T] {
+func sliceV[T any](s2 Slice2[omit, T]) *slice[T] {
 	var s1 *slice[T]
 	if s2 != nil {
 		s1 = &slice[T]{s2}
@@ -2030,11 +2030,11 @@ func (b *Array[T]) Get(index int) (T, bool) {
 
 func (b *Array[T]) DeleteRangeOptions(index, count int,
 	opts DeleteRangeOptions,
-) *slice[T] {
+) Slice[T] {
 	return sliceV(b.tree.DeleteRangeAt(index, count, opts))
 }
 
-func (b *Array[T]) DeleteRange(index, count int) *slice[T] {
+func (b *Array[T]) DeleteRange(index, count int) Slice[T] {
 	return b.DeleteRangeOptions(index, count, DeleteRangeOptions{})
 }
 
@@ -2887,21 +2887,21 @@ func (b *Map[K, V]) Copy() *Map[K, V] {
 
 func (b *Map[K, V]) DeleteRangeAtOptions(index, count int,
 	opts DeleteRangeOptions,
-) *slice2[K, V] {
+) Slice2[K, V] {
 	return b.tree.DeleteRangeAt(index, count, opts)
 }
 
 func (b *Map[K, V]) DeleteRangeOptions(min, max K, opts DeleteRangeOptions,
-) *slice2[K, V] {
+) Slice2[K, V] {
 	var emptyValue V
 	return b.tree.DeleteRange(min, emptyValue, max, emptyValue, opts)
 }
 
-func (b *Map[K, V]) DeleteRangeAt(index, count int) *slice2[K, V] {
+func (b *Map[K, V]) DeleteRangeAt(index, count int) Slice2[K, V] {
 	return b.DeleteRangeAtOptions(index, count, DeleteRangeOptions{})
 }
 
-func (b *Map[K, V]) DeleteRange(min, max K) *slice2[K, V] {
+func (b *Map[K, V]) DeleteRange(min, max K) Slice2[K, V] {
 	return b.DeleteRangeOptions(min, max, DeleteRangeOptions{})
 }
 
@@ -3299,20 +3299,20 @@ func (b *Set[K]) Release() {
 }
 
 func (b *Set[K]) DeleteRangeAtOptions(index, count int, opts DeleteRangeOptions,
-) *slice[K] {
+) Slice[K] {
 	return sliceK(b.base.DeleteRangeAtOptions(index, count, opts))
 }
 
 func (b *Set[K]) DeleteRangeOptions(min, max K, opts DeleteRangeOptions,
-) *slice[K] {
+) Slice[K] {
 	return sliceK(b.base.DeleteRangeOptions(min, max, opts))
 }
 
-func (b *Set[K]) DeleteRangeAt(index, count int) *slice[K] {
+func (b *Set[K]) DeleteRangeAt(index, count int) Slice[K] {
 	return b.DeleteRangeAtOptions(index, count, DeleteRangeOptions{})
 }
 
-func (b *Set[K]) DeleteRange(min, max K) *slice[K] {
+func (b *Set[K]) DeleteRange(min, max K) Slice[K] {
 	return b.DeleteRangeOptions(min, max, DeleteRangeOptions{})
 }
 
@@ -3735,20 +3735,20 @@ func (b *Table[T]) DescendAtMut(index int) iter.Seq[T] {
 
 func (b *Table[T]) DeleteRangeAtOptions(index, count int,
 	opts DeleteRangeOptions,
-) *slice[T] {
+) Slice[T] {
 	return sliceV(b.tree.DeleteRangeAt(index, count, opts))
 }
 
 func (b *Table[T]) DeleteRangeOptions(min, max T, opts DeleteRangeOptions,
-) *slice[T] {
+) Slice[T] {
 	return sliceV(b.tree.DeleteRange(omit{}, min, omit{}, max, opts))
 }
 
-func (b *Table[T]) DeleteRangeAt(index, count int) *slice[T] {
+func (b *Table[T]) DeleteRangeAt(index, count int) Slice[T] {
 	return b.DeleteRangeAtOptions(index, count, DeleteRangeOptions{})
 }
 
-func (b *Table[T]) DeleteRange(min, max T) *slice[T] {
+func (b *Table[T]) DeleteRange(min, max T) Slice[T] {
 	return b.DeleteRangeOptions(min, max, DeleteRangeOptions{})
 }
 
