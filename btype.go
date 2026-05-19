@@ -3385,7 +3385,7 @@ func (b *Stack[T]) At(pos int) (T, bool) {
 // Returns false if no item is found at position.
 // MUTABLE OPERATION.
 func (b *Stack[T]) AtMut(pos int) (T, bool) {
-	_, item, ok := b.tree.GetAt(b.tree.Len() - pos - 1)
+	_, item, ok := b.tree.GetAtMut(b.tree.Len() - pos - 1)
 	return item, ok
 }
 
