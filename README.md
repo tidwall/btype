@@ -1,6 +1,8 @@
 <p align="center">
 <picture>
-  <img alt="btype - btree based collection types for go" src=".github/logo.png">
+  <source media="(prefers-color-scheme: dark)" srcset="/.github/logo-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="/.github/logo-light.png">
+  <img alt="Tile38" src="/.github/images/logo-light.png" width="640">
 </picture>
 <br>
 <a href="#map">Map</a> •
@@ -11,9 +13,8 @@
 <a href="#queue">Queue</a> • 
 <a href="#deque">Deque</a> •
 <a href="#prique">Prique</a>
-
-</p>
-<p align="center">
+<br>
+<br>
 <a href="https://godoc.org/github.com/tidwall/btype"
 ><img src="https://godoc.org/github.com/tidwall/btree?status.svg"
 ></a>
