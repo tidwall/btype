@@ -156,7 +156,6 @@ func (t *tree[K, V]) ensureBranch(n *node[K, V], i int) bool {
 func (t *tree[K, V]) splitRoot() {
 	root2 := t.newNode(false)
 	right, mkey, mvalue := t.splitNode(t.root)
-	root2.branch.children[0] = t.newNode(t.root.leaf())
 	root2.branch.children[0] = t.root
 	root2.branch.children[1] = right
 	t.insertBranchItemAt(root2, mkey, mvalue, 0)
