@@ -89,6 +89,8 @@ PopFront()              # Remove the first item.
 PopBack()               # Remove the last item.
 Front()                 # Get the first item.
 Back()                  # Get the last item.
+PopFrontIf(cond)        # Remove first item if cond returns true.
+PopBackIf(cond)         # Remove last item if cond returns true.
 
 InsertAt(i, key, val)   # Inserts item at index. (collection size grows by one)
 ReplaceAt(i, key, val)  # Replace an item at index.
@@ -191,6 +193,8 @@ PopFront()              # Remove the first key.
 PopBack()               # Remove the last key.
 Front()                 # Get the first key.
 Back()                  # Get the last key.
+PopFrontIf(cond)        # Remove first key if cond returns true.
+PopBackIf(cond)         # Remove last key if cond returns true.
 
 InsertAt(i, key)        # Insert key at index. (collection size grows by one)
 ReplaceAt(i, key)       # Replace key at index.
@@ -287,6 +291,8 @@ PopFront()            # Remove the first item.
 PopBack()             # Remove the last item.
 Front()               # Get the first item.
 Back()                # Get the last item.
+PopFrontIf(cond)      # Remove first item if cond returns true.
+PopBackIf(cond)       # Remove last item if cond returns true.
 
 DeleteRange(i, count) # Remove items starting at index.
 
@@ -570,6 +576,8 @@ PopFront()              # Remove the first item.
 PopBack()               # Remove the last item.
 Front()                 # Get the first item.
 Back()                  # Get the last item.
+PopFrontIf(cond)        # Remove first item if cond returns true.
+PopBackIf(cond)         # Remove last item if cond returns true.
 
 InsertAt(i, item)       # Inserts item at index. (collection size grows by one)
 ReplaceAt(i, item)      # Replace an item at index.
@@ -598,9 +606,10 @@ a LIFO (last-in, first-out) data structure.
 ### Operations
 
 ```py
-Push(item) # Insert item to top of stack.
-Pop()      # Remove item from top stack.
-Top()      # Get the top item in stack
+Push(item)   # Insert item to top of stack.
+Pop()        # Remove item from top stack.
+Top()        # Get the top item in stack
+PopIf(cond)  # Remove item from top stack if cond returns true.
 
 All()      # Iterate items in ascending order.      (iter.Seq[T])
 Drain()    # Iterate and remove in ascending order. (iter.Seq[T])
@@ -678,9 +687,10 @@ a FIFO (first-in, first-out) data structure.
 ### Operations
 
 ```py
-Push(item) # Insert item at the end of queue.
-Pop()      # Remove the first item.
-Front()    # Get the first item.
+Push(item)   # Insert item at the end of queue.
+Pop()        # Remove the first item.
+Front()      # Get the first item.
+PopIf(cond)  # Remove first item if cond returns true.
 
 All()      # Iterate items in ascending order.      (iter.Seq[T])
 Drain()    # Iterate and remove in ascending order. (iter.Seq[T])
@@ -759,11 +769,13 @@ btype.Deque is a double-ended queue.
 ### Operations
 
 ```py
-Push(item)      # Insert item at the end of queue.
-PopFront()      # Remove the first item.
-PopBack()       # Remove the last item.
-Front()         # Get the first item.
-Back( )         # Get the last item.
+Push(item)       # Insert item at the end of queue.
+PopFront()       # Remove the first item.
+PopBack()        # Remove the last item.
+Front()          # Get the first item.
+Back( )          # Get the last item.
+PopFrontIf(cond) # Remove first item if cond returns true.
+PopBackIf(cond)  # Remove last item if cond returns true.
 
 All()           # Iterate items in ascending order.       (iter.Seq[T])
 Backward()      # Iterate items in desending order.       (iter.Seq[T])
@@ -849,9 +861,10 @@ It also inherits the [Table](#table) collection, allowing for
 ### Operations
 
 ```py
-Push(item) # Insert item into queue.
-Pop()      # Remove the largest item.
-Front()    # Get the largest item.
+Push(item)   # Insert item into queue.
+Pop()        # Remove the largest item.
+Front()      # Get the largest item.
+PopIf(cond)  # Remove largest item if cond returns true.
 
 All()      # Iterate items in order of largest to smallest.      (iter.Seq[T])
 Drain()    # Iterate and remove in order of largest to smallest. (iter.Seq[T])

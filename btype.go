@@ -551,70 +551,98 @@ func (t *tree[K, V]) collapseRootIfNeeded() {
 	}
 }
 
-func (t *tree[K, V]) nodePopFront(n *node[K, V]) (K, V) {
+func (t *tree[K, V]) nodePopFront(n *node[K, V], c func(K, V) bool,
+) (K, V, bool) {
 	var emptyKey K
 	var emptyValue V
 	if n.leaf() {
 		oldKey, oldValue := n.keys[0], n.values[0]
+		if c != nil && !c(oldKey, oldValue) {
+			return emptyKey, emptyValue, false
+		}
 		copy(n.keys[:n.len-1], n.keys[1:n.len])
 		copy(n.values[:n.len-1], n.values[1:n.len])
 		n.keys[n.len-1] = emptyKey
 		n.values[n.len-1] = emptyValue
 		n.len--
-		return oldKey, oldValue
+		return oldKey, oldValue, true
 	}
 	t.cowChild(n, 0, true)
-	oldKey, oldValue := t.nodePopFront(n.branch.children[0])
+	oldKey, oldValue, popped := t.nodePopFront(n.branch.children[0], c)
+	if !popped {
+		return emptyKey, emptyValue, false
+	}
 	n.branch.counts[0]--
 	if n.branch.children[0].len < minItems {
 		t.rebalance(n, 0)
 	}
-	return oldKey, oldValue
+	return oldKey, oldValue, true
 }
 
-func (t *tree[K, V]) nodePopBack(n *node[K, V]) (K, V) {
+func (t *tree[K, V]) nodePopBack(n *node[K, V], c func(K, V) bool,
+) (K, V, bool) {
 	var emptyKey K
 	var emptyValue V
 	if n.leaf() {
 		oldKey, oldValue := n.keys[n.len-1], n.values[n.len-1]
+		if c != nil && !c(oldKey, oldValue) {
+			return emptyKey, emptyValue, false
+		}
 		n.keys[n.len-1] = emptyKey
 		n.values[n.len-1] = emptyValue
 		n.len--
-		return oldKey, oldValue
+		return oldKey, oldValue, true
 	}
 	t.cowChild(n, n.len, true)
-	oldKey, oldValue := t.nodePopBack(n.branch.children[n.len])
+	oldKey, oldValue, popped := t.nodePopBack(n.branch.children[n.len], c)
+	if !popped {
+		return emptyKey, emptyValue, false
+	}
 	n.branch.counts[n.len]--
 	if n.branch.children[n.len].len < minItems {
 		t.rebalance(n, n.len)
 	}
-	return oldKey, oldValue
+	return oldKey, oldValue, true
 }
 
-func (t *tree[K, V]) PopFront() (K, V, bool) {
+func (t *tree[K, V]) PopFrontIf(cond func(key K, value V) bool) (K, V, bool) {
 	var emptyKey K
 	var emptyValue V
 	if t.count == 0 {
 		return emptyKey, emptyValue, false
 	}
 	t.cowRoot(true)
-	oldKey, oldValue := t.nodePopFront(t.root)
+	oldKey, oldValue, popped := t.nodePopFront(t.root, cond)
+	if !popped {
+		return emptyKey, emptyValue, false
+	}
+	t.count--
+	t.collapseRootIfNeeded()
+	return oldKey, oldValue, true
+}
+
+func (t *tree[K, V]) PopFront() (K, V, bool) {
+	return t.PopFrontIf(nil)
+}
+
+func (t *tree[K, V]) PopBackIf(cond func(key K, value V) bool) (K, V, bool) {
+	var emptyKey K
+	var emptyValue V
+	if t.count == 0 {
+		return emptyKey, emptyValue, false
+	}
+	t.cowRoot(true)
+	oldKey, oldValue, popped := t.nodePopBack(t.root, cond)
+	if !popped {
+		return emptyKey, emptyValue, false
+	}
 	t.count--
 	t.collapseRootIfNeeded()
 	return oldKey, oldValue, true
 }
 
 func (t *tree[K, V]) PopBack() (K, V, bool) {
-	var emptyKey K
-	var emptyValue V
-	if t.count == 0 {
-		return emptyKey, emptyValue, false
-	}
-	t.cowRoot(true)
-	oldKey, oldValue := t.nodePopBack(t.root)
-	t.count--
-	t.collapseRootIfNeeded()
-	return oldKey, oldValue, true
+	return t.PopBackIf(nil)
 }
 
 func (t *tree[K, V]) front0(mut bool) (K, V, bool) {
@@ -2100,6 +2128,26 @@ func (b *Array[T]) PopBack() (T, bool) {
 	return value, ok
 }
 
+func (b *Array[T]) PopFrontIf(cond func(item T) bool) (T, bool) {
+	if cond == nil {
+		return b.PopFront()
+	}
+	_, value, ok := b.tree.PopFrontIf(func(_ omit, item T) bool {
+		return cond(item)
+	})
+	return value, ok
+}
+
+func (b *Array[T]) PopBackIf(cond func(item T) bool) (T, bool) {
+	if cond == nil {
+		return b.PopBack()
+	}
+	_, value, ok := b.tree.PopBackIf(func(_ omit, item T) bool {
+		return cond(item)
+	})
+	return value, ok
+}
+
 func (b *Array[T]) Append(items ...T) {
 	for _, item := range items {
 		b.PushBack(item)
@@ -2969,6 +3017,14 @@ func (b *Map[K, V]) PopBack() (K, V, bool) {
 	return b.tree.PopBack()
 }
 
+func (b *Map[K, V]) PopFrontIf(cond func(key K, value V) bool) (K, V, bool) {
+	return b.tree.PopFrontIf(cond)
+}
+
+func (b *Map[K, V]) PopBackIf(cond func(key K, value V) bool) (K, V, bool) {
+	return b.tree.PopBackIf(cond)
+}
+
 func (b *Map[K, V]) Front() (K, V, bool) {
 	return b.tree.Front()
 }
@@ -3090,6 +3146,16 @@ func (b *Queue[T]) Push(item T) {
 // Pop first item from queue.
 func (b *Queue[T]) Pop() (T, bool) {
 	_, item, ok := b.tree.PopFront()
+	return item, ok
+}
+
+func (b *Queue[T]) PopIf(cond func(item T) bool) (T, bool) {
+	if cond == nil {
+		return b.Pop()
+	}
+	_, item, ok := b.tree.PopFrontIf(func(_ omit, item T) bool {
+		return cond(item)
+	})
 	return item, ok
 }
 
@@ -3265,6 +3331,26 @@ func (b *Set[K]) PopFront() (K, bool) {
 
 func (b *Set[K]) PopBack() (K, bool) {
 	key, _, ok := b.base.PopBack()
+	return key, ok
+}
+
+func (b *Set[K]) PopFrontIf(cond func(key K) bool) (K, bool) {
+	if cond == nil {
+		return b.PopFront()
+	}
+	key, _, ok := b.base.PopFrontIf(func(key K, _ omit) bool {
+		return cond(key)
+	})
+	return key, ok
+}
+
+func (b *Set[K]) PopBackIf(cond func(key K) bool) (K, bool) {
+	if cond == nil {
+		return b.PopBack()
+	}
+	key, _, ok := b.base.PopBackIf(func(key K, _ omit) bool {
+		return cond(key)
+	})
 	return key, ok
 }
 
@@ -3654,6 +3740,26 @@ func (b *Table[T]) PopFront() (T, bool) {
 
 func (b *Table[T]) PopBack() (T, bool) {
 	_, value, ok := b.tree.PopBack()
+	return value, ok
+}
+
+func (b *Table[T]) PopFrontIf(cond func(item T) bool) (T, bool) {
+	if cond == nil {
+		return b.PopFront()
+	}
+	_, value, ok := b.tree.PopFrontIf(func(_ omit, item T) bool {
+		return cond(item)
+	})
+	return value, ok
+}
+
+func (b *Table[T]) PopBackIf(cond func(item T) bool) (T, bool) {
+	if cond == nil {
+		return b.PopBack()
+	}
+	_, value, ok := b.tree.PopBackIf(func(_ omit, item T) bool {
+		return cond(item)
+	})
 	return value, ok
 }
 
@@ -4702,6 +4808,26 @@ func (b *Deque[T]) PopBack() (T, bool) {
 	return val, ok
 }
 
+func (b *Deque[T]) PopFrontIf(cond func(item T) bool) (T, bool) {
+	if cond == nil {
+		return b.PopFront()
+	}
+	_, value, ok := b.tree.PopFrontIf(func(_ omit, item T) bool {
+		return cond(item)
+	})
+	return value, ok
+}
+
+func (b *Deque[T]) PopBackIf(cond func(item T) bool) (T, bool) {
+	if cond == nil {
+		return b.PopBack()
+	}
+	_, value, ok := b.tree.PopBackIf(func(_ omit, item T) bool {
+		return cond(item)
+	})
+	return value, ok
+}
+
 func (b *Deque[T]) Front() (T, bool) {
 	_, item, ok := b.tree.Front()
 	return item, ok
@@ -4911,8 +5037,19 @@ func (b *Prique[T]) Delete(key T) (T, bool) {
 	return empty, false
 }
 
+// Pop first item from queue.
 func (b *Prique[T]) Pop() (T, bool) {
 	v, ok := b.table.PopBack()
+	return v.value, ok
+}
+
+func (b *Prique[T]) PopIf(cond func(item T) bool) (T, bool) {
+	if cond == nil {
+		return b.Pop()
+	}
+	v, ok := b.table.PopBackIf(func(item pqitem[T]) bool {
+		return cond(item.value)
+	})
 	return v.value, ok
 }
 

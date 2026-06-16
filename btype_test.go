@@ -4245,3 +4245,239 @@ func TestTablePushBack(t *testing.T) {
 	assert(k == 999)
 
 }
+
+func TestArrayPopIf(t *testing.T) {
+	var b Array[int]
+
+	for i := range 100 {
+		b.PushBack(i)
+	}
+	x, ok := b.PopFrontIf(nil)
+	assert(ok && x == 0)
+	x, ok = b.PopBackIf(nil)
+	assert(ok && x == 99)
+
+	x, ok = b.PopFrontIf(func(x int) bool {
+		assert(x == 1)
+		return false
+	})
+	assert(!ok && x == 0)
+	x, ok = b.PopFrontIf(func(x int) bool {
+		assert(x == 1)
+		return true
+	})
+	assert(ok && x == 1)
+
+	x, ok = b.PopBackIf(func(x int) bool {
+		assert(x == 98)
+		return false
+	})
+	assert(!ok && x == 0)
+	x, ok = b.PopBackIf(func(x int) bool {
+		assert(x == 98)
+		return true
+	})
+	assert(ok && x == 98)
+
+}
+
+func TestQueuePopIf(t *testing.T) {
+	var b Queue[int]
+	for i := range 100 {
+		b.Push(i)
+	}
+	x, ok := b.PopIf(nil)
+	assert(ok && x == 0)
+	x, ok = b.PopIf(func(x int) bool {
+		assert(x == 1)
+		return false
+	})
+	assert(!ok && x == 0)
+	x, ok = b.PopIf(func(x int) bool {
+		assert(x == 1)
+		return true
+	})
+	assert(ok && x == 1)
+
+}
+
+func TestTablePopIf(t *testing.T) {
+	var b Table[int]
+
+	for i := range 100 {
+		b.PushBack(i)
+	}
+	x, ok := b.PopFrontIf(nil)
+	assert(ok && x == 0)
+	x, ok = b.PopBackIf(nil)
+	assert(ok && x == 99)
+
+	x, ok = b.PopFrontIf(func(x int) bool {
+		assert(x == 1)
+		return false
+	})
+	assert(!ok && x == 0)
+	x, ok = b.PopFrontIf(func(x int) bool {
+		assert(x == 1)
+		return true
+	})
+	assert(ok && x == 1)
+
+	x, ok = b.PopBackIf(func(x int) bool {
+		assert(x == 98)
+		return false
+	})
+	assert(!ok && x == 0)
+	x, ok = b.PopBackIf(func(x int) bool {
+		assert(x == 98)
+		return true
+	})
+	assert(ok && x == 98)
+
+}
+
+func TestDequePopIf(t *testing.T) {
+	var b Deque[int]
+
+	for i := range 100 {
+		b.PushBack(i)
+	}
+	x, ok := b.PopFrontIf(nil)
+	assert(ok && x == 0)
+	x, ok = b.PopBackIf(nil)
+	assert(ok && x == 99)
+
+	x, ok = b.PopFrontIf(func(x int) bool {
+		assert(x == 1)
+		return false
+	})
+	assert(!ok && x == 0)
+	x, ok = b.PopFrontIf(func(x int) bool {
+		assert(x == 1)
+		return true
+	})
+	assert(ok && x == 1)
+
+	x, ok = b.PopBackIf(func(x int) bool {
+		assert(x == 98)
+		return false
+	})
+	assert(!ok && x == 0)
+	x, ok = b.PopBackIf(func(x int) bool {
+		assert(x == 98)
+		return true
+	})
+	assert(ok && x == 98)
+
+}
+
+func TestPriquePopIf(t *testing.T) {
+	var b Prique[int]
+	for i := range 100 {
+		b.Push(i)
+	}
+	x, ok := b.PopIf(nil)
+	assert(ok && x == 99)
+	x, ok = b.PopIf(func(x int) bool {
+		assert(x == 98)
+		return false
+	})
+	assert(!ok && x == 0)
+	x, ok = b.PopIf(func(x int) bool {
+		assert(x == 98)
+		return true
+	})
+	assert(ok && x == 98)
+
+}
+
+func TestMapPopIf(t *testing.T) {
+	N := 10000
+	var c Map[int, int]
+	isempty := func(k, v int) bool {
+		return k == 0 && v == 0
+	}
+	c.tree.Sane(isempty)
+
+	key, value, deleted := c.PopFrontIf(nil)
+	assert(!deleted && key == 0 && value == 0)
+
+	key, value, ok := c.Front()
+	assert(!ok && key == 0 && value == 0)
+
+	key, value, deleted = c.PopBackIf(nil)
+	assert(!deleted && key == 0 && value == 0)
+
+	key, value, ok = c.Back()
+	assert(!ok && key == 0 && value == 0)
+
+	for i := range N {
+		key := N - i - 1
+		ok := c.PushFront(key, -key)
+		assert(ok)
+		c.tree.Sane(isempty)
+
+		ok = c.PushFront(key, -key)
+		assert(!ok)
+		assert(c.Len() == i+1)
+
+		k, v, ok := c.Front()
+		assert(ok && k == key && v == -k)
+
+		k, v, ok = c.Back()
+		assert(ok && k == N-1 && v == -k)
+	}
+	c.tree.Sane(isempty)
+	for i := range N {
+		key, value, deleted := c.PopFrontIf(nil)
+		assert(deleted && key == i && value == -key)
+		assert(c.Len() == N-i-1)
+		c.PushFront(key, value)
+		key, value, deleted = c.PopFrontIf(func(key int, value int) bool {
+			assert(key == i && value == -key)
+			return false
+		})
+		assert(key == 0 && value == 0 && !deleted)
+		key, value, deleted = c.PopFrontIf(func(key int, value int) bool {
+			assert(key == i && value == -key)
+			return true
+		})
+		assert(deleted && key == i && value == -key)
+		assert(c.Len() == N-i-1)
+
+		c.tree.Sane(isempty)
+	}
+	c.tree.Sane(isempty)
+	assert(c.Len() == 0)
+
+	for i := range N {
+		key := i
+
+		ok := c.PushBack(key, -key)
+		assert(ok)
+		c.tree.Sane(isempty)
+
+		ok = c.PushBack(key, -key)
+		assert(!ok)
+	}
+	c.tree.Sane(isempty)
+	for i := range N {
+		key, value, ok := c.PopBackIf(nil)
+		assert(ok && key == N-i-1 && value == -key)
+		c.PushBack(key, value)
+		key, value, ok = c.PopBackIf(func(key int, value int) bool {
+			assert(key == N-i-1 && value == -key)
+			return false
+		})
+		assert(key == 0 && value == 0 && !ok)
+
+		key, value, ok = c.PopBackIf(func(key int, value int) bool {
+			assert(key == N-i-1 && value == -key)
+			return true
+		})
+		assert(ok && key == N-i-1 && value == -key)
+		c.tree.Sane(isempty)
+	}
+	c.tree.Sane(isempty)
+	assert(c.Len() == 0)
+}
