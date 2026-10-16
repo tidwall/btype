@@ -62,7 +62,6 @@ func (t *tree[K, V]) saneNode(n *node[K, V], depth, height int,
 	isempty func(K, V) bool,
 ) int {
 	assert(unsafe.Pointer(n) == unsafe.Pointer(&n.keys[0]))
-	var emptyKey string
 	count := n.len
 	if n.len < minItems {
 		assert(depth <= 0)
@@ -80,18 +79,6 @@ func (t *tree[K, V]) saneNode(n *node[K, V], depth, height int,
 		assert(depth == height)
 		return count
 	}
-
-	// branch
-	if t.strprefix && n.branch != nil {
-		_, ok := any(emptyKey).(string)
-		assert(ok)
-		assert(n.branch.prefixes != nil)
-		assert(slices.IsSorted(n.branch.prefixes[:n.len]))
-		for i := 0; i < n.len; i++ {
-			assert(n.branch.prefixes[i] == prefixString(n.keys[i]))
-		}
-	}
-
 	if t.dataCompare != nil {
 		for i := 0; i < n.len; i++ {
 			left := n.branch.children[i]
@@ -1230,7 +1217,7 @@ func testBasic1String(t *testing.T, noprefix bool) {
 	t.Logf("seed: %d", seed)
 	N := 100000
 	m := NewMapOptions(MapOptions[string, int]{
-		NoPrefix: noprefix,
+		// NoPrefix: noprefix,
 	})
 
 	val, ok := m.Get("")
@@ -1255,7 +1242,7 @@ func testBasic1String(t *testing.T, noprefix bool) {
 	m.tree.Sane(nil)
 
 	m2 := m.Copy()
-	assert(m2.tree.strprefix == !noprefix)
+	// assert(m2.tree.strprefix == !noprefix)
 	assert(slices.Equal(slices.Collect(m.Keys()), slices.Collect(m2.Keys())))
 	assert(slices.Equal(slices.Collect(m.Values()), slices.Collect(m2.Values())))
 	assert(slices.Equal(slices.Collect(m.ValuesMut()), slices.Collect(m2.ValuesMut())))
@@ -1333,19 +1320,6 @@ func TestBasic1StringNoPrefix(t *testing.T) {
 
 func TestBigStringKeys(t *testing.T) {
 	prefix := "hfpqmrixjhshqoeuryfbal"
-
-	assert(prefixString("") == 0)
-	assert(prefixString("h") == 7493989779944505344)
-	assert(prefixString("hf") == 7522700227568992256)
-	assert(prefixString("hfp") == 7522823372871303168)
-	assert(prefixString("hfpq") == 7522823858202607616)
-	assert(prefixString("hfpqm") == 7522823860031324160)
-	assert(prefixString("hfpqmr") == 7522823860038795264)
-	assert(prefixString("hfpqmri") == 7522823860038822144)
-	assert(prefixString("hfpqmrix") == 7522823860038822264)
-	assert(prefixString("hfpqmrixj") == 7522823860038822264)
-	assert(prefixString("hfpqmrixjh") == 7522823860038822264)
-	assert(prefixString("hfpqmrixjhs") == 7522823860038822264)
 
 	m := NewMap[string, int]()
 

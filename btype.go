@@ -28,11 +28,7 @@ const minItems = maxItems / 2
 
 type tree[K, V any] struct {
 	copied      bool        // Copy called at least once during life of tree.
-	strprefix   bool        // Use string prefixes, K _MUST_ be a string.
 	initd       bool        // Flag used by outer types
-	alt         bool        // Flag used by outer types
-	nopre       bool        // Flag used by outer types
-	stdops      bool        // Flag used by outer types
 	count       int         // total tree count
 	root        *node[K, V] // root node
 	dataCopy    func(V) V   // Value data copy-on-write
@@ -44,7 +40,7 @@ type tree[K, V any] struct {
 type node[K, V any] struct {
 	keys   [maxItems]K   // item keys, _MUST_ be first field
 	values [maxItems]V   // item values
-	rc     int64         // copy-on-write reference counter
+	rc     atomic.Int64  // copy-on-write reference counter
 	len    int           // number of items (key value pairs)
 	branch *branch[K, V] // branch children (nil for leaf)
 }
@@ -52,18 +48,11 @@ type node[K, V any] struct {
 type branch[K, V any] struct {
 	children [maxItems + 1]*node[K, V] // all child nodes
 	counts   [maxItems + 1]int         // all child counts
-	prefixes *[maxItems]uint64         // string prefixes
 }
 
 type branchAlloc[K, V any] struct {
 	node   node[K, V]
 	branch branch[K, V]
-}
-
-type branchPrefixAlloc[K, V any] struct {
-	node     node[K, V]
-	branch   branch[K, V]
-	prefixes [maxItems]uint64
 }
 
 type omit struct{}
@@ -72,11 +61,6 @@ func (t *tree[K, V]) newNode(leaf bool) *node[K, V] {
 	var n *node[K, V]
 	if leaf {
 		n = new(node[K, V])
-	} else if t.strprefix {
-		b := new(branchPrefixAlloc[K, V])
-		b.node.branch = &b.branch
-		b.node.branch.prefixes = &b.prefixes
-		n = (*node[K, V])(unsafe.Pointer(b))
 	} else {
 		b := new(branchAlloc[K, V])
 		b.node.branch = &b.branch
@@ -127,9 +111,6 @@ func (t *tree[K, V]) splitNode(n *node[K, V]) (*node[K, V], K, V) {
 			n.branch.children[i] = nil
 		}
 		copy(right.branch.counts[:], n.branch.counts[m+1:])
-		if n.branch.prefixes != nil {
-			copy(right.branch.prefixes[:], n.branch.prefixes[m+1:])
-		}
 	}
 	return right, mkey, mvalue
 }
@@ -175,10 +156,6 @@ func (t *tree[K, V]) ensureRoot() (wasSplit bool) {
 
 func (t *tree[K, V]) insertBranchItemAt(n *node[K, V], key K, value V, i int,
 ) {
-	if n.branch.prefixes != nil {
-		copy(n.branch.prefixes[i+1:], n.branch.prefixes[i:n.len])
-		n.branch.prefixes[i] = prefixString(key)
-	}
 	n.insertItemAt(key, value, i)
 }
 
@@ -208,7 +185,7 @@ func (t *tree[K, V]) insertFirstItem(key K, value V) {
 }
 
 func (t *tree[K, V]) releaseNode(n *node[K, V]) {
-	if atomic.AddInt64(&n.rc, -1) < 0 {
+	if n.rc.Add(-1) < 0 {
 		// Release items and children
 		if t.dataRelease != nil {
 			for i := 0; i < n.len; i++ {
@@ -237,13 +214,10 @@ func (t *tree[K, V]) copyNode(n *node[K, V]) *node[K, V] {
 	}
 	if !n.leaf() {
 		for i := 0; i < n.len+1; i++ {
-			atomic.AddInt64(&n.branch.children[i].rc, 1)
+			n.branch.children[i].rc.Add(1)
 			n2.branch.children[i] = n.branch.children[i]
 		}
 		copy(n2.branch.counts[:], n.branch.counts[:n.len+1])
-		if n.branch.prefixes != nil {
-			copy(n2.branch.prefixes[:], n.branch.prefixes[:n.len])
-		}
 	}
 	return n2
 }
@@ -261,14 +235,14 @@ func (t *tree[K, V]) cow0(pn **node[K, V]) {
 
 // should inline
 func (t *tree[K, V]) cowRoot(mut bool) {
-	if mut && t.copied && t.root != nil && atomic.LoadInt64(&t.root.rc) > 0 {
+	if mut && t.copied && t.root != nil && t.root.rc.Load() > 0 {
 		t.cow0(&t.root)
 	}
 }
 
 // should inline
 func (t *tree[K, V]) cowChild(n *node[K, V], i int, mut bool) {
-	if mut && t.copied && atomic.LoadInt64(&n.branch.children[i].rc) > 0 {
+	if mut && t.copied && n.branch.children[i].rc.Load() > 0 {
 		t.cow0(&n.branch.children[i])
 	}
 }
@@ -325,11 +299,6 @@ func (t *tree[K, V]) rebalance(n *node[K, V], i int) {
 		copy(left.keys[left.len+1:], right.keys[:right.len])
 		left.values[left.len] = n.values[i]
 		copy(left.values[left.len+1:], right.values[:right.len])
-		if left.branch != nil && left.branch.prefixes != nil {
-			copy(left.branch.prefixes[left.len+1:],
-				right.branch.prefixes[:right.len])
-			left.branch.prefixes[left.len] = n.branch.prefixes[i]
-		}
 		if !left.leaf() {
 			copy(left.branch.children[left.len+1:],
 				right.branch.children[:right.len+1])
@@ -343,10 +312,6 @@ func (t *tree[K, V]) rebalance(n *node[K, V], i int) {
 		n.keys[n.len-1] = emptyKey
 		copy(n.values[i:], n.values[i+1:n.len])
 		n.values[n.len-1] = emptyValue
-		if n.branch.prefixes != nil {
-			copy(n.branch.prefixes[i:], n.branch.prefixes[i+1:n.len])
-			n.branch.prefixes[n.len-1] = 0
-		}
 
 		// move the children over one slot
 		copy(n.branch.children[i+1:], n.branch.children[i+2:n.len+1])
@@ -369,14 +334,6 @@ func (t *tree[K, V]) rebalance(n *node[K, V], i int) {
 		right.values[0] = n.values[i]
 		n.values[i] = left.values[left.len-1]
 		left.values[left.len-1] = emptyValue
-		if left.branch != nil && left.branch.prefixes != nil {
-			copy(right.branch.prefixes[1:], right.branch.prefixes[:right.len])
-			right.branch.prefixes[0] = n.branch.prefixes[i]
-			n.branch.prefixes[i] = left.branch.prefixes[left.len-1]
-			left.branch.prefixes[left.len-1] = 0
-		} else if n.branch.prefixes != nil {
-			n.branch.prefixes[i] = prefixString(n.keys[i])
-		}
 		if !left.leaf() {
 			// move the left-node last child into the right-node first slot
 			copy(right.branch.children[1:], right.branch.children[:right.len+1])
@@ -400,14 +357,6 @@ func (t *tree[K, V]) rebalance(n *node[K, V], i int) {
 		n.values[i] = right.values[0]
 		copy(right.values[:], right.values[1:right.len])
 		right.values[right.len-1] = emptyValue
-		if left.branch != nil && left.branch.prefixes != nil {
-			left.branch.prefixes[left.len] = n.branch.prefixes[i]
-			n.branch.prefixes[i] = right.branch.prefixes[0]
-			copy(right.branch.prefixes[:], right.branch.prefixes[1:right.len])
-			right.branch.prefixes[right.len-1] = 0
-		} else if n.branch.prefixes != nil {
-			n.branch.prefixes[i] = prefixString(n.keys[i])
-		}
 		if !left.leaf() {
 			left.branch.children[left.len+1] = right.branch.children[0]
 			copy(right.branch.children[:], right.branch.children[1:right.len+1])
@@ -422,15 +371,6 @@ func (t *tree[K, V]) rebalance(n *node[K, V], i int) {
 	// Recalculate the counts for both right and left children.
 	n.branch.counts[i] = n.branch.children[i].count()
 	n.branch.counts[i+1] = n.branch.children[i+1].count()
-}
-
-func prefixString[K any](key K) uint64 {
-	s := *(*string)(unsafe.Pointer(&key))
-	var b [8]byte
-	copy(b[:], s[:])
-	return uint64(b[7])<<0 | uint64(b[6])<<8 | uint64(b[5])<<16 |
-		uint64(b[4])<<24 | uint64(b[3])<<32 | uint64(b[2])<<40 |
-		uint64(b[1])<<48 | uint64(b[0])<<56
 }
 
 func (t *tree[K, V]) nodeAll(n *node[K, V], yield func(K, V) bool, mut bool,
@@ -721,7 +661,7 @@ func (t *tree[K, V]) CopyInto(t2 *tree[K, V]) {
 	t.copied = true
 	*t2 = *t
 	if t.root != nil {
-		atomic.AddInt64(&t.root.rc, 1)
+		t.root.rc.Add(1)
 	}
 }
 
@@ -1725,10 +1665,6 @@ func (t *tree[K, V]) nodeDeleteRangeAt(n *node[K, V], offset, index, count int,
 		n.keys[n.len-1] = emptyKey
 		copy(n.values[i:], n.values[i+1:n.len])
 		n.values[n.len-1] = emptyValue
-		if n.branch.prefixes != nil {
-			copy(n.branch.prefixes[i:], n.branch.prefixes[i+1:n.len])
-			n.branch.prefixes[n.len-1] = 0
-		}
 		copy(n.branch.counts[i+1:], n.branch.counts[i+2:n.len+1])
 		n.branch.counts[n.len] = 0
 		copy(n.branch.children[i+1:], n.branch.children[i+2:n.len+1])
@@ -1746,9 +1682,6 @@ func (t *tree[K, V]) nodeDeleteRangeAt(n *node[K, V], offset, index, count int,
 		}
 		t.cowChild(n, i, true)
 		n.keys[i], n.values[i] = t.nodeDeleteMax(n.branch.children[i])
-		if n.branch.prefixes != nil {
-			n.branch.prefixes[i] = prefixString(n.keys[i])
-		}
 		count--
 		n.branch.counts[i]--
 		if n.branch.children[i].len < minItems {
@@ -1774,10 +1707,6 @@ func (t *tree[K, V]) nodeDeleteRangeAt(n *node[K, V], offset, index, count int,
 		n.keys[n.len-1] = emptyKey
 		copy(n.values[i:], n.values[i+1:n.len])
 		n.values[n.len-1] = emptyValue
-		if n.branch.prefixes != nil {
-			copy(n.branch.prefixes[i:], n.branch.prefixes[i+1:n.len])
-			n.branch.prefixes[n.len-1] = 0
-		}
 		copy(n.branch.counts[i:], n.branch.counts[i+1:n.len+1])
 		n.branch.counts[n.len] = 0
 		copy(n.branch.children[i:], n.branch.children[i+1:n.len+1])
@@ -1804,10 +1733,6 @@ func (t *tree[K, V]) nodeDeleteRangeAt(n *node[K, V], offset, index, count int,
 		n.keys[n.len-1] = emptyKey
 		copy(n.values[i:], n.values[i+1:n.len])
 		n.values[n.len-1] = emptyValue
-		if n.branch.prefixes != nil {
-			copy(n.branch.prefixes[i:], n.branch.prefixes[i+1:n.len])
-			n.branch.prefixes[n.len-1] = 0
-		}
 		copy(n.branch.counts[i+1:], n.branch.counts[i+2:n.len+1])
 		n.branch.counts[n.len] = 0
 		copy(n.branch.children[i+1:], n.branch.children[i+2:n.len+1])
@@ -2171,16 +2096,14 @@ type Map[K cmp.Ordered, V any] struct {
 }
 
 type MapOptions[K cmp.Ordered, V any] struct {
-	Copy     func(V) V
-	Release  func(V)
-	NoPrefix bool
+	Copy    func(V) V
+	Release func(V)
 }
 
 func NewMapOptions[K cmp.Ordered, V any](opts MapOptions[K, V]) *Map[K, V] {
 	b := new(Map[K, V])
 	b.tree.dataCopy = opts.Copy
 	b.tree.dataRelease = opts.Release
-	b.tree.nopre = opts.NoPrefix
 	b.init()
 	return b
 }
@@ -2239,21 +2162,14 @@ func (b *Map[K, V]) init0() {
 		b.tree.dataCompare = mapCompare
 		var key K
 		if _, ok := any(key).(string); ok {
-			if b.tree.nopre {
-				// String key with user requesting no prefix.
-				// Use standard operations with binary search.
-				b.tree.stdops = true
-				b.tree.dataSearch = mapBinarySearch
-			} else {
-				// Use string prefix.
-				b.tree.strprefix = true
-			}
+			// println("!")
+			// Use standard operations with binary search.
+			b.tree.dataSearch = mapBinarySearch
 		}
 	}
 	if b.tree.dataSearch == nil {
 		b.tree.dataSearch = mapSearch
 	}
-	b.tree.alt = b.tree.alt || b.tree.stdops || b.tree.strprefix
 	b.tree.initd = true
 }
 
@@ -2314,9 +2230,6 @@ foundInLeaf:
 
 func mapInsert[K cmp.Ordered, V any](b *Map[K, V], key K, value V) (V, bool) {
 	b.init()
-	if b.tree.alt {
-		return b.altInsert(key, value)
-	}
 	var emptyValue V
 	if b.tree.count == 0 {
 		b.tree.insertFirstItem(key, value)
@@ -2348,9 +2261,6 @@ func mapInsert[K cmp.Ordered, V any](b *Map[K, V], key K, value V) (V, bool) {
 }
 
 func mapReplace[K cmp.Ordered, V any](b *Map[K, V], key K, value V) (V, bool) {
-	if b.tree.alt {
-		return b.altReplace(key, value)
-	}
 	var emptyValue V
 	if b.tree.count == 0 {
 		return emptyValue, false
@@ -2433,9 +2343,6 @@ foundInBranch:
 
 func mapSet[K cmp.Ordered, V any](b *Map[K, V], key K, value V) (V, bool) {
 	b.init()
-	if b.tree.alt {
-		return b.altSet(key, value)
-	}
 	var emptyValue V
 	if b.tree.count == 0 {
 		b.tree.insertFirstItem(key, value)
@@ -2469,9 +2376,6 @@ func mapSet[K cmp.Ordered, V any](b *Map[K, V], key K, value V) (V, bool) {
 }
 
 func mapGet[K cmp.Ordered, V any](b *Map[K, V], key K) (V, bool) {
-	if b.tree.alt {
-		return b.altGet(key, false)
-	}
 	var emptyValue V
 	if b.tree.count == 0 {
 		return emptyValue, false
@@ -2543,9 +2447,6 @@ func (b *Map[K, V]) nodeDelete(n *node[K, V], key K) (V, bool) {
 }
 
 func mapDelete[K cmp.Ordered, V any](b *Map[K, V], key K) (V, bool) {
-	if b.tree.alt {
-		return b.altDelete(key)
-	}
 	var emptyValue V
 	if b.tree.count == 0 {
 		return emptyValue, false
@@ -2608,9 +2509,6 @@ func (b *Map[K, V]) Get(key K) (V, bool) {
 }
 
 func (b *Map[K, V]) GetMut(key K) (V, bool) {
-	if b.tree.alt {
-		return b.altGet(key, true)
-	}
 	var emptyValue V
 	if b.tree.count == 0 {
 		return emptyValue, false
@@ -2634,268 +2532,6 @@ func (b *Map[K, V]) GetMut(key K) (V, bool) {
 		}
 		b.tree.cowChild(n, i, true)
 		n = n.branch.children[i]
-	}
-}
-
-func (b *Map[K, V]) strSearch(n *node[K, V], prefix uint64, key K,
-) (i int, found bool) {
-	if n.leaf() {
-		// bsearch
-		if key > n.keys[n.len-1] {
-			return n.len, false
-		}
-		low, high := 0, n.len
-		for low < high {
-			h := (low + high) >> 1
-			if !(key < n.keys[h]) {
-				low = h + 1
-			} else {
-				high = h
-			}
-		}
-		if low > 0 && !(n.keys[low-1] < key) {
-			return low - 1, true
-		}
-		return low, false
-	} else {
-		if prefix > n.branch.prefixes[n.len-1] {
-			return n.len, false
-		}
-		for prefix > n.branch.prefixes[i] {
-			i++
-		}
-		if prefix < n.branch.prefixes[i] {
-			return i, false
-		}
-		for ; i < n.len; i++ {
-			if key <= n.keys[i] {
-				return i, key == n.keys[i]
-			}
-		}
-		return i, false
-	}
-}
-
-func (b *Map[K, V]) strNodeInsert(n *node[K, V], prefix uint64, key K,
-	value V,
-) (V, int) {
-	var emptyValue V
-	i, found := b.strSearch(n, prefix, key)
-	if found {
-		return n.values[i], 0
-	}
-	if n.leaf() {
-		n.insertItemAt(key, value, i)
-		return emptyValue, 1
-	}
-	b.tree.cowChild(n, i, true)
-	if b.tree.ensureBranch(n, i) {
-		return b.strNodeInsert(n, prefix, key, value)
-	}
-	prev, inserted := b.strNodeInsert(n.branch.children[i], prefix, key, value)
-	n.branch.counts[i] += inserted
-	return prev, inserted
-}
-
-func (b *Map[K, V]) strInsert(key K, value V) (V, bool) {
-	prefix := prefixString(key)
-	var emptyValue V
-	if b.tree.count == 0 {
-		b.tree.insertFirstItem(key, value)
-		return emptyValue, true
-	}
-	b.tree.cowRoot(true)
-	b.tree.ensureRoot()
-	current, inserted := b.strNodeInsert(b.tree.root, prefix, key, value)
-	b.tree.count += inserted
-	return current, inserted == 1
-}
-
-//go:noinline
-func (b *Map[K, V]) altInsert(key K, value V) (V, bool) {
-	if b.tree.strprefix {
-		return b.strInsert(key, value)
-	} else {
-		return b.tree.Insert(key, value)
-	}
-}
-
-func (b *Map[K, V]) strNodeSet(n *node[K, V], prefix uint64, key K, value V,
-) (V, int) {
-	var emptyValue V
-	i, found := b.strSearch(n, prefix, key)
-	if found {
-		old := n.values[i]
-		n.values[i] = value
-		return old, 0
-	}
-	if n.leaf() {
-		n.insertItemAt(key, value, i)
-		return emptyValue, 1
-	}
-	b.tree.cowChild(n, i, true)
-	if b.tree.ensureBranch(n, i) {
-		return b.strNodeSet(n, prefix, key, value)
-	}
-	prev, inserted := b.strNodeSet(n.branch.children[i], prefix, key, value)
-	n.branch.counts[i] += inserted
-	return prev, inserted
-}
-
-func (b *Map[K, V]) strSet(key K, value V) (V, bool) {
-	prefix := prefixString(key)
-	var emptyValue V
-	if b.tree.count == 0 {
-		b.tree.insertFirstItem(key, value)
-		return emptyValue, false
-	}
-	b.tree.cowRoot(true)
-	b.tree.ensureRoot()
-	current, inserted := b.strNodeSet(b.tree.root, prefix, key, value)
-	b.tree.count += inserted
-	return current, inserted == 0
-}
-
-//go:noinline
-func (b *Map[K, V]) altSet(key K, value V) (V, bool) {
-	if b.tree.strprefix {
-		return b.strSet(key, value)
-	} else {
-		return b.tree.Set(key, value)
-	}
-}
-
-func (b *Map[K, V]) strGet(key K, mut bool) (V, bool) {
-	var emptyValue V
-	if b.tree.count == 0 {
-		return emptyValue, false
-	}
-	prefix := prefixString(key)
-	b.tree.cowRoot(mut)
-	n := b.tree.root
-	for {
-		i, found := b.strSearch(n, prefix, key)
-		if found {
-			return n.values[i], true
-		}
-		if n.leaf() {
-			return emptyValue, false
-		}
-		b.tree.cowChild(n, i, mut)
-		n = n.branch.children[i]
-	}
-}
-
-//go:noinline
-func (b *Map[K, V]) altGet(key K, mut bool) (V, bool) {
-	if b.tree.strprefix {
-		return b.strGet(key, mut)
-	} else {
-		var emptyValue V
-		return b.tree.get0(key, emptyValue, mut)
-	}
-}
-
-func (b *Map[K, V]) strReplace(key K, value V) (V, bool) {
-	var emptyValue V
-	if b.tree.count == 0 {
-		return emptyValue, false
-	}
-	prefix := prefixString(key)
-	b.tree.cowRoot(true)
-	n := b.tree.root
-	for {
-		i, found := b.strSearch(n, prefix, key)
-		if found {
-			old := n.values[i]
-			n.values[i] = value
-			return old, true
-		}
-		if n.leaf() {
-			return emptyValue, false
-		}
-		b.tree.cowChild(n, i, true)
-		n = n.branch.children[i]
-	}
-}
-
-//go:noinline
-func (b *Map[K, V]) altReplace(key K, value V) (V, bool) {
-	if b.tree.strprefix {
-		return b.strReplace(key, value)
-	} else {
-		return b.tree.Replace(key, value)
-	}
-}
-
-func (b *Map[K, V]) strNodeDelete(n *node[K, V], prefix uint64, key K,
-) (V, bool) {
-	var emptyKey K
-	var emptyValue V
-	i, found := b.strSearch(n, prefix, key)
-	if n.leaf() {
-		if found {
-			old := n.values[i]
-			copy(n.keys[i:n.len-1], n.keys[i+1:n.len])
-			n.keys[n.len-1] = emptyKey
-			copy(n.values[i:n.len-1], n.values[i+1:n.len])
-			n.values[n.len-1] = emptyValue
-			n.len--
-			return old, true
-		}
-		return emptyValue, false
-	}
-	var old V
-	var deleted bool
-	b.tree.cowChild(n, i, true)
-	if found {
-		old = n.values[i]
-		maxKey, maxValue := b.tree.nodeDeleteMax(n.branch.children[i])
-		deleted = true
-		n.keys[i] = maxKey
-		n.values[i] = maxValue
-		if n.branch.prefixes != nil {
-			n.branch.prefixes[i] = prefixString(maxKey)
-		}
-	} else {
-		old, deleted = b.strNodeDelete(n.branch.children[i], prefix, key)
-	}
-	if !deleted {
-		return old, false
-	}
-	n.branch.counts[i]--
-	if n.branch.children[i].len < minItems {
-		b.tree.rebalance(n, i)
-	}
-	return old, true
-}
-
-func (b *Map[K, V]) strDelete(key K) (V, bool) {
-	var emptyValue V
-	if b.tree.count == 0 {
-		return emptyValue, false
-	}
-	prefix := prefixString(key)
-	b.tree.cowRoot(true)
-	old, deleted := b.strNodeDelete(b.tree.root, prefix, key)
-	if deleted {
-		b.tree.count--
-		if b.tree.count == 0 {
-			b.tree.root = nil
-		} else if b.tree.root.len == 0 && !b.tree.root.leaf() {
-			b.tree.root = b.tree.root.branch.children[0]
-		}
-	}
-	return old, deleted
-}
-
-//go:noinline
-func (b *Map[K, V]) altDelete(key K) (V, bool) {
-	if b.tree.strprefix {
-		return b.strDelete(key)
-	} else {
-		var emptyValue V
-		return b.tree.Delete(key, emptyValue)
 	}
 }
 
@@ -3612,11 +3248,6 @@ func (b *Table[T]) init0() {
 		if c.ok {
 			b.tree.dataCompare = c.compare
 			b.tree.dataSearch = c.search
-			b.tree.strprefix = c.ok && !c.idr &&
-				len(c.fields) > 0 &&
-				c.fields[0].kind == reflect.String &&
-				c.fields[0].collate == cbincs &&
-				c.fields[0].dir == casc
 		}
 	}
 	b.tree.initd = true

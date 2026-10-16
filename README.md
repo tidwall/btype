@@ -952,7 +952,6 @@ The btype package has various optimizations that enhance performance over existi
 - Branch node counting.
 - Auto-detected search method.
 - Seperate keys and values for maps.
-- Prefixing in branch nodes for string keys.
 - Last-first search algo. (fast bounds check, fewer conditions, fast bulk loads)
 - Reference counted COW.
 
@@ -981,10 +980,10 @@ Benchmarking 1,000,000 items, 50 runs, taking the average result.
 
 ```
 tidwall/btype
-insert(seq)      1,000,000 ops in   0.017 secs   17.1 ns/op   58,389,383 op/sec
-insert(rand)     1,000,000 ops in   0.076 secs   76.0 ns/op   13,159,734 op/sec
-get(seq)         1,000,000 ops in   0.030 secs   29.8 ns/op   33,599,978 op/sec
-get(rand)        1,000,000 ops in   0.064 secs   64.4 ns/op   15,535,343 op/sec
+insert(seq)      1,000,000 ops in   0.017 secs   16.5 ns/op   60,469,589 op/sec
+insert(rand)     1,000,000 ops in   0.075 secs   74.7 ns/op   13,382,882 op/sec
+get(seq)         1,000,000 ops in   0.029 secs   29.4 ns/op   34,041,293 op/sec
+get(rand)        1,000,000 ops in   0.065 secs   64.9 ns/op   15,407,170 op/sec
 
 tidwall/btree
 insert(seq)      1,000,000 ops in   0.037 secs   36.9 ns/op   27,104,762 op/sec
@@ -1021,10 +1020,10 @@ get(rand)        1,000,000 ops in   0.079 secs   79.1 ns/op   12,638,367 op/sec
 
 ```
 tidwall/btype
-insert(seq)      1,000,000 ops in   0.018 secs   18.3 ns/op   54,498,410 op/sec
-insert(rand)     1,000,000 ops in   0.080 secs   80.3 ns/op   12,457,898 op/sec
-get(seq)         1,000,000 ops in   0.030 secs   30.1 ns/op   33,200,724 op/sec
-get(rand)        1,000,000 ops in   0.072 secs   72.4 ns/op   13,819,949 op/sec
+insert(seq)      1,000,000 ops in   0.018 secs   18.1 ns/op   55,277,882 op/sec
+insert(rand)     1,000,000 ops in   0.084 secs   84.1 ns/op   11,897,138 op/sec
+get(seq)         1,000,000 ops in   0.030 secs   30.2 ns/op   33,057,894 op/sec
+get(rand)        1,000,000 ops in   0.074 secs   73.6 ns/op   13,591,580 op/sec
 
 tidwall/btree
 insert(seq)      1,000,000 ops in   0.039 secs   38.7 ns/op   25,824,082 op/sec
@@ -1061,10 +1060,10 @@ get(rand)        1,000,000 ops in   0.087 secs   87.0 ns/op   11,497,710 op/sec
 
 ```
 tidwall/btype
-insert(seq)      1,000,000 ops in   0.074 secs   73.9 ns/op   13,534,682 op/sec
-insert(rand)     1,000,000 ops in   0.287 secs  287.2 ns/op    3,482,420 op/sec
-get(seq)         1,000,000 ops in   0.094 secs   93.6 ns/op   10,683,081 op/sec
-get(rand)        1,000,000 ops in   0.328 secs  327.6 ns/op    3,052,945 op/sec
+insert(seq)      1,000,000 ops in   0.078 secs    78.4 ns/op  12,758,865 op/sec
+insert(rand)     1,000,000 ops in   0.397 secs   397.3 ns/op   2,516,762 op/sec
+get(seq)         1,000,000 ops in   0.140 secs   140.2 ns/op   7,130,353 op/sec
+get(rand)        1,000,000 ops in   0.450 secs   449.5 ns/op   2,224,584 op/sec
 
 tidwall/btree
 insert(seq)      1,000,000 ops in   0.124 secs  124.3 ns/op    8,043,933 op/sec
