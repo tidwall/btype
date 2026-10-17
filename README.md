@@ -103,6 +103,8 @@ DescendAt(i)            # Iterate items in descending order <= to index. (iter.S
 DeleteRange(min, max)   # Remove items within the provided sub-range. [min,max)
 DeleteRangeAt(i, count) # Remove items starting at index.
 
+GetAction(key action)   # Perform Action (replace or delete) on value
+
 Len()                   # Get the number of items in map.
 Copy()                  # Copy map, fast O(1), uses Copy-on-write shadow cloning.
 Clear()                 # Remove all items from map

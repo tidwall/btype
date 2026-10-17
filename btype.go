@@ -2162,7 +2162,6 @@ func (b *Map[K, V]) init0() {
 		b.tree.dataCompare = mapCompare
 		var key K
 		if _, ok := any(key).(string); ok {
-			// println("!")
 			// Use standard operations with binary search.
 			b.tree.dataSearch = mapBinarySearch
 		}
@@ -2532,6 +2531,72 @@ func (b *Map[K, V]) GetMut(key K) (V, bool) {
 		}
 		b.tree.cowChild(n, i, true)
 		n = n.branch.children[i]
+	}
+}
+
+type Action int
+
+const (
+	ActionGet Action = iota
+	ActionDelete
+	ActionReplace
+)
+
+func (b *Map[K, V]) GetAction(key K, value func(V) (V, Action)) {
+	var emptyKey K
+	var emptyValue V
+	if b.tree.count == 0 || value == nil {
+		return
+	}
+	b.tree.cowRoot(true)
+	var path [24]byte
+	var depth int
+	n := b.tree.root
+	for {
+		i := 0
+		if key > n.keyAt(n.len-1) {
+			i = n.len
+		} else {
+			for key > n.keyAt(i) {
+				i++
+			}
+			if key == n.keyAt(i) {
+				val, act := value(n.values[i])
+				switch act {
+				case ActionGet:
+					// do nothing
+				case ActionReplace:
+					// replace in-place
+					n.values[i] = val
+				case ActionDelete:
+					if fanout < 256 && n.leaf() && n.len > minItems {
+						// delete in-place and fixup counts
+						copy(n.keys[i:n.len-1], n.keys[i+1:n.len])
+						n.keys[n.len-1] = emptyKey
+						copy(n.values[i:n.len-1], n.values[i+1:n.len])
+						n.values[n.len-1] = emptyValue
+						n.len--
+						b.tree.count--
+						n := b.tree.root
+						for i := 0; i < depth; i++ {
+							n.branch.counts[path[i]]--
+							n = n.branch.children[path[i]]
+						}
+					} else {
+						// fallback to standard deletion
+						b.Delete(key)
+					}
+				}
+				return
+			}
+		}
+		if n.leaf() {
+			return
+		}
+		b.tree.cowChild(n, i, true)
+		n = n.branch.children[i]
+		path[depth] = byte(i)
+		depth++
 	}
 }
 

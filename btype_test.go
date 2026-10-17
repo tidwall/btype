@@ -4455,3 +4455,95 @@ func TestMapPopIf(t *testing.T) {
 	c.tree.Sane(isempty)
 	assert(c.Len() == 0)
 }
+
+func TestMapGetAction(t *testing.T) {
+	seed := uint64(time.Now().UnixNano())
+	t.Logf("seed: %d", seed)
+	rng := rand.New(rand.NewPCG(0, seed))
+
+	N := 10000
+	var c Map[int, int]
+	isempty := func(k, v int) bool {
+		return k == 0 && v == 0
+	}
+	c.tree.Sane(isempty)
+
+	for _, i := range rng.Perm(N) {
+		c.Insert(i, i)
+	}
+	c.tree.Sane(isempty)
+
+	for _, i := range rng.Perm(N) {
+		c.GetAction(i, func(j int) (int, Action) {
+			assert(j == i)
+			return j, ActionGet
+		})
+	}
+	c.tree.Sane(isempty)
+	for _, i := range rng.Perm(N) {
+		if i%2 == 0 {
+			c.GetAction(i, func(j int) (int, Action) {
+				assert(j == i)
+				j *= -1
+				return j, ActionReplace
+			})
+			c.tree.Sane(isempty)
+		}
+	}
+	for _, i := range rng.Perm(N) {
+		if i%2 == 0 {
+			c.GetAction(i, func(j int) (int, Action) {
+				assert(j == -i)
+				return j, ActionGet
+			})
+		}
+	}
+	for _, i := range rng.Perm(N) {
+		if i%2 == 1 {
+			c.GetAction(i, func(j int) (int, Action) {
+				assert(j == i)
+				return j, ActionGet
+			})
+		}
+	}
+	var n = c.Len()
+	for _, i := range rng.Perm(N) {
+		if i%2 == 0 {
+			c.GetAction(i, func(j int) (int, Action) {
+				assert(j == -i)
+				return j, ActionDelete
+			})
+			c.tree.Sane(isempty)
+			n--
+			assert(c.Len() == n)
+		}
+	}
+
+	for _, i := range rng.Perm(N) {
+		if i%2 == 0 {
+			c.GetAction(i, func(j int) (int, Action) {
+				return j, ActionDelete
+			})
+			c.tree.Sane(isempty)
+			assert(c.Len() == n)
+		}
+	}
+
+	for _, i := range rng.Perm(N) {
+		if i%2 == 1 {
+			c.GetAction(i, func(j int) (int, Action) {
+				assert(j == i)
+				return j, ActionDelete
+			})
+			c.tree.Sane(isempty)
+			n--
+			assert(c.Len() == n)
+		}
+	}
+	c.tree.Sane(isempty)
+	assert(c.Len() == 0)
+	c.GetAction(0, func(j int) (int, Action) {
+		return j, ActionDelete
+	})
+	assert(c.Len() == 0)
+}
