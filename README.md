@@ -1,5 +1,5 @@
 > [!NOTE]
-> **All code and functionality has been merged into [github.com/tidwall/btree](tidwall/btree).**
+> **All code and functionality has been merged into [tidwall/btree](https://github.com/tidwall/btree).**
 
 <p align="center">
 <picture>
