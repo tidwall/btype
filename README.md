@@ -1,3 +1,6 @@
+> [!NOTE]
+> **All code and functionality has been merged into [github.com/tidwall/btree](tidwall/btree).**
+
 <p align="center">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="/.github/logo-dark.png">
